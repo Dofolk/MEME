@@ -13,9 +13,6 @@ if 1:
 else:
     A = {}
 L = len(A)
-#%%
-Y = ['TGCTGGATAAGAATGTTTTAGCAATCTCTTT', 'TCAGCGAAAAAAATTAAAGCGCAAGATTGTT', 'GCGACAACCGGAATATGAAAGCAAAGCGCAG']
-W = 6
 
 # %%
 
@@ -37,9 +34,6 @@ class MEME:
         
         self.f = None
         self.f_0 = None
-        
-        self.theta1 = self.f
-        self.theta2 = self.f_0
 
         self.lamb1  = None
         self.lamb2 = None
@@ -47,8 +41,10 @@ class MEME:
         self.I_str = None
         self.I_subseq_freq = None
         self.var_init()
-        self.theta = [self.theta1, self.theta2]
+        self.theta = [self.f, self.f_0]
         self.lamb = [self.lamb1, self.lamb2]
+
+        self.erase = np.ones(self.n)
 
     
     def var_init(self):
@@ -159,11 +155,15 @@ class MEME:
 
         Z_ij = np.divide( np.concatenate((p1,p2), axis = 1), summation)
         E_val = np.sum( np.multiply( Z_ij, np.concatenate((np.log(p1),np.log(p2)), axis = 1 ) ) )
-        
-        self.update_var(Z_ij, theta, lamb)
+
+        self.E_step_update(Z_ij)
 
         return E_val
     
+    def E_step_update(self, Z):
+        self.Z = Z
+        return
+
     def M_step(self, Z):
         lamb1 = 0
         lamb2 = 0
@@ -178,35 +178,35 @@ class MEME:
         # update theta value
         c_0k = np.zeros([1,L])
         c_jk = np.zeros([self.W, L])
-        erase = self.erase()
+        
         
         for k in range(L):
             for i in range(self.n):
                 freq = self.I_subseq_freq[i]
-                c_0k[k] += Z[i][1]*freq[k]
-                
+                c_0k[0][k] += Z[i][1]*freq[k]
+            for j in range(self.W):
+                val = 0
+                for i in range(self.n):
+                    if self.I_str[i][j] is k:
+                        val += self.erase[i]*self.Z[i][0]
+                c_jk[j][k] = val
         
-        return
-    
-    def erase(self,Z):
-        return
-    
-    def update_var(self, Z, theta, lamb):
-        # update variables, parameters after each step or operation
-
-        self.Z = Z
-        self.theta = theta
-        self.lamb = lamb
-        
-        idx = 0
-        for seq in range(self.N):
-            length = self.l[seq]
-            val = np.pad(np.array([self.Z[idx][0] for idx in range(idx, idx + length - self.W + 1, 1)])\
-                         , (0, self.W - 1), mode = 'constant').reshape(length,)
-            self.z[seq][0:length] = val
+        self.M_step_update([lamb1,lamb2], [c_0k,c_jk])
 
         return
-        
+    
+    def M_step_update(self, lamb, c):
+
+        # update lambda value
+        self.lamb1, self.lamb2, self.lamb = lamb[0], lamb[1], lamb
+
+        # update theta value
+        self.f_0 = c[0]/sum(c[0])
+        for pos in range(self.W):
+            self.f[pos] = c[pos]/sum(c[pos])
+        self.theta = [self.f, self.f_0]
+
+        return    
 
     def iter(self):
         return
